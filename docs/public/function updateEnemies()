@@ -1,0 +1,514 @@
+
+const config = {
+    type: Phaser.AUTO,
+    width: 1280,
+    height: 720,
+    parent: "game-container",
+    backgroundColor: "#83d5e8",
+
+    physics: {
+        default: "arcade",
+        arcade: {
+            gravity: { y: 900 },
+            debug: false
+        }
+    },
+
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+
+    scene: {
+        create: create,
+        update: update
+    }
+};
+
+let player;
+let cursors;
+let keys;
+let jumpKey;
+let platforms;
+let coins;
+let enemies;
+
+let touchLeft = false;
+let touchRight = false;
+let jumpRequested = false;
+
+let score = 0;
+let lives = 3;
+let scoreText;
+let livesText;
+let invulnerable = false;
+
+new Phaser.Game(config);
+
+
+function create() {
+
+    // CÉU
+    this.add.rectangle(640, 360, 1280, 720, 0x83d5e8);
+
+    // SOL
+    this.add.circle(1080, 100, 55, 0xffdf70);
+
+    // MONTANHAS
+    this.add.triangle(
+        250, 430, 0, 300, 250, 0, 500, 300, 0x438b67
+    );
+
+    this.add.triangle(
+        800, 430, 0, 300, 250, 0, 500, 300, 0x367b59
+    );
+
+    // ÁRVORES
+    for (let x = 100; x < 2400; x += 300) {
+        this.add.rectangle(x, 570, 35, 160, 0x79502f);
+        this.add.circle(x, 480, 75, 0x237a45);
+        this.add.circle(x - 35, 510, 45, 0x319653);
+        this.add.circle(x + 35, 510, 45, 0x319653);
+    }
+
+    // CHÃO
+    let groundGraphics = this.make.graphics({ x: 0, y: 0 });
+
+    groundGraphics.fillStyle(0x68452c);
+    groundGraphics.fillRect(0, 0, 1280, 80);
+
+    groundGraphics.fillStyle(0x45a049);
+    groundGraphics.fillRect(0, 0, 1280, 16);
+
+    groundGraphics.generateTexture("ground", 1280, 80);
+    groundGraphics.destroy();
+
+    // PLATAFORMAS
+    let platformGraphics = this.make.graphics({ x: 0, y: 0 });
+
+    platformGraphics.fillStyle(0x79502f);
+    platformGraphics.fillRoundedRect(0, 0, 220, 25, 8);
+
+    platformGraphics.fillStyle(0x50a94c);
+    platformGraphics.fillRoundedRect(0, 0, 220, 10, 5);
+
+    platformGraphics.generateTexture("platform", 220, 25);
+    platformGraphics.destroy();
+
+    // PERSONAGEM PROVISÓRIO
+    let heroGraphics = this.make.graphics({ x: 0, y: 0 });
+
+    heroGraphics.fillStyle(0x174f39);
+    heroGraphics.fillRoundedRect(5, 5, 38, 54, 10);
+
+    heroGraphics.fillStyle(0xffd19b);
+    heroGraphics.fillCircle(24, 14, 12);
+
+    heroGraphics.fillStyle(0xffffff);
+    heroGraphics.fillCircle(28, 13, 4);
+
+    heroGraphics.fillStyle(0x172b36);
+    heroGraphics.fillCircle(29, 13, 2);
+
+    heroGraphics.generateTexture("hero", 48, 64);
+    heroGraphics.destroy();
+
+    // MOEDA
+    let coinGraphics = this.make.graphics({ x: 0, y: 0 });
+
+    coinGraphics.fillStyle(0xffd700);
+    coinGraphics.fillCircle(18, 18, 16);
+
+    coinGraphics.lineStyle(3, 0xffa500);
+    coinGraphics.strokeCircle(18, 18, 14);
+
+    coinGraphics.fillStyle(0x238b45);
+    coinGraphics.fillEllipse(18, 18, 12, 7);
+
+    coinGraphics.lineStyle(2, 0x145c30);
+    coinGraphics.lineBetween(12, 22, 24, 14);
+
+    coinGraphics.generateTexture("coin", 36, 36);
+    coinGraphics.destroy();
+
+    // JOANINHA
+    let enemyGraphics = this.make.graphics({ x: 0, y: 0 });
+
+    enemyGraphics.fillStyle(0x111111);
+    enemyGraphics.fillCircle(21, 24, 17);
+
+    enemyGraphics.fillStyle(0xe52b2b);
+    enemyGraphics.fillEllipse(21, 20, 34, 29);
+
+    enemyGraphics.lineStyle(3, 0x111111);
+    enemyGraphics.lineBetween(21, 6, 21, 34);
+
+    enemyGraphics.fillStyle(0x111111);
+    enemyGraphics.fillCircle(12, 15, 4);
+    enemyGraphics.fillCircle(29, 15, 4);
+    enemyGraphics.fillCircle(12, 27, 4);
+    enemyGraphics.fillCircle(29, 27, 4);
+
+    enemyGraphics.fillStyle(0xffffff);
+    enemyGraphics.fillCircle(14, 34, 5);
+    enemyGraphics.fillCircle(28, 34, 5);
+
+    enemyGraphics.fillStyle(0x111111);
+    enemyGraphics.fillCircle(15, 34, 2);
+    enemyGraphics.fillCircle(29, 34, 2);
+
+    enemyGraphics.generateTexture("ladybug", 42, 44);
+    enemyGraphics.destroy();
+
+    // PLATAFORMAS
+    platforms = this.physics.add.staticGroup();
+
+    platforms.create(640, 680, "ground");
+    platforms.create(1920, 680, "ground");
+
+    platforms.create(400, 540, "platform");
+    platforms.create(700, 440, "platform");
+    platforms.create(1050, 520, "platform");
+    platforms.create(1400, 430, "platform");
+    platforms.create(1750, 520, "platform");
+    platforms.create(2100, 420, "platform");
+
+    // MOEDAS
+    coins = this.physics.add.group({
+        allowGravity: false,
+        immovable: true
+    });
+
+    const coinPositions = [
+        [250, 600],
+        [400, 480],
+        [700, 380],
+        [900, 590],
+        [1050, 460],
+        [1400, 370],
+        [1600, 590],
+        [1750, 460],
+        [2100, 360],
+        [2350, 590]
+    ];
+
+    coinPositions.forEach(position => {
+        const coin = coins.create(
+            position[0],
+            position[1],
+            "coin"
+        );
+
+        coin.setCircle(14);
+
+        this.tweens.add({
+            targets: coin,
+            y: coin.y - 12,
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
+    });
+
+    // INIMIGOS
+    enemies = this.physics.add.group({
+        allowGravity: true
+    });
+
+    createEnemy(this, 700, 390, 590, 810);
+    createEnemy(this, 1750, 470, 1640, 1860);
+
+    // PERSONAGEM
+    player = this.physics.add.sprite(100, 580, "hero");
+
+    player.setCollideWorldBounds(true);
+    player.setBounce(0);
+
+    this.physics.add.collider(player, platforms);
+
+    // COLETA DE MOEDAS
+    this.physics.add.overlap(
+        player,
+        coins,
+        collectCoin,
+        null,
+        this
+    );
+
+    // COLISÃO COM INIMIGOS
+    this.physics.add.collider(enemies, platforms);
+
+    this.physics.add.overlap(
+        player,
+        enemies,
+        hitEnemy,
+        null,
+        this
+    );
+
+    // MUNDO
+    this.physics.world.setBounds(0, 0, 2560, 720);
+
+    // CÂMERA
+    this.cameras.main.setBounds(0, 0, 2560, 720);
+    this.cameras.main.startFollow(player, true, 0.08, 0.08);
+
+    // TECLADO
+    cursors = this.input.keyboard.createCursorKeys();
+
+    keys = this.input.keyboard.addKeys({
+        left: "A",
+        right: "D"
+    });
+
+    jumpKey = this.input.keyboard.addKey(
+        Phaser.Input.Keyboard.KeyCodes.SPACE
+    );
+
+    // TÍTULO
+    this.add.text(25, 20, "BIOQUEST", {
+        fontSize: "34px",
+        fontStyle: "bold",
+        color: "#ffffff",
+        stroke: "#174f39",
+        strokeThickness: 5
+    }).setScrollFactor(0).setDepth(1000);
+
+    this.add.text(25, 65, "MUNDO 1 - FLORESTA DA ECOLOGIA", {
+        fontSize: "18px",
+        color: "#ffffff",
+        stroke: "#174f39",
+        strokeThickness: 3
+    }).setScrollFactor(0).setDepth(1000);
+
+    // PLACAR
+    scoreText = this.add.text(1010, 25, "PONTOS: 0", {
+        fontSize: "24px",
+        fontStyle: "bold",
+        color: "#ffffff",
+        stroke: "#174f39",
+        strokeThickness: 4
+    }).setScrollFactor(0).setDepth(1000);
+
+    // VIDAS
+    livesText = this.add.text(1010, 65, "VIDAS: ♥ ♥ ♥", {
+        fontSize: "24px",
+        fontStyle: "bold",
+        color: "#ff3333",
+        stroke: "#ffffff",
+        strokeThickness: 3
+    }).setScrollFactor(0).setDepth(1000);
+
+    // CONTROLES CELULAR
+    createButton(this, 85, 610, "◀",
+        value => touchLeft = value);
+
+    createButton(this, 185, 610, "▶",
+        value => touchRight = value);
+
+    createButton(this, 1160, 610, "⬆",
+        value => {
+            if (value) {
+                jumpRequested = true;
+            }
+        });
+
+    this.add.text(25, 110,
+        "SETAS / A-D PARA ANDAR | ESPAÇO PARA PULAR", {
+            fontSize: "15px",
+            color: "#ffffff",
+            stroke: "#174f39",
+            strokeThickness: 3
+        }).setScrollFactor(0).setDepth(1000);
+}
+
+
+// CRIAR JOANINHA
+function createEnemy(scene, x, y, minX, maxX) {
+
+    const enemy = enemies.create(x, y, "ladybug");
+
+    enemy.setBounce(0);
+    enemy.setCollideWorldBounds(true);
+    enemy.setVelocityX(90);
+
+    enemy.minX = minX;
+    enemy.maxX = maxX;
+
+    return enemy;
+}
+
+
+// MOVIMENTO DOS INIMIGOS
+function updateEnemies() {
+
+    enemies.children.iterate(enemy => {
+
+        if (!enemy || !enemy.active) {
+            return;
+        }
+
+        if (enemy.x <= enemy.minX) {
+            enemy.setVelocityX(90);
+        }
+
+        else if (enemy.x >= enemy.maxX) {
+            enemy.setVelocityX(-90);
+        }
+    });
+}
+
+
+// COLETAR MOEDA
+function collectCoin(player, coin) {
+
+    if (!coin.active) {
+        return;
+    }
+
+    score += 10;
+
+    scoreText.setText("PONTOS: " + score);
+
+    coin.destroy();
+}
+
+
+// ATINGIDO POR INIMIGO
+function hitEnemy(scene, player, enemy) {
+
+    if (invulnerable || !enemy.active) {
+        return;
+    }
+
+    lives--;
+
+    livesText.setText(
+        "VIDAS: " + "♥ ".repeat(lives)
+    );
+
+    if (lives <= 0) {
+
+        scene.add.text(640, 320, "FIM DE JOGO!", {
+            fontSize: "60px",
+            fontStyle: "bold",
+            color: "#ff3333",
+            stroke: "#ffffff",
+            strokeThickness: 6
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2000);
+
+        scene.add.text(640, 390, "Reiniciando...", {
+            fontSize: "28px",
+            color: "#ffffff",
+            stroke: "#174f39",
+            strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2000);
+
+        scene.time.delayedCall(2000, () => {
+            score = 0;
+            lives = 3;
+            invulnerable = false;
+            scene.scene.restart();
+        });
+
+        return;
+    }
+
+    // PROTEÇÃO TEMPORÁRIA
+    invulnerable = true;
+
+    player.setPosition(100, 580);
+    player.setVelocity(0, -250);
+
+    player.setTint(0xff7777);
+
+    scene.time.delayedCall(1500, () => {
+
+        invulnerable = false;
+
+        if (player.active) {
+            player.clearTint();
+        }
+    });
+}
+
+
+// BOTÕES VIRTUAIS
+function createButton(scene, x, y, symbol, action) {
+
+    const button = scene.add.circle(
+        x, y, 42, 0x174f39, 0.85
+    );
+
+    button.setScrollFactor(0);
+    button.setDepth(1000);
+    button.setInteractive();
+
+    const label = scene.add.text(
+        x, y, symbol,
+        {
+            fontSize: "32px",
+            color: "#ffffff",
+            fontStyle: "bold"
+        }
+    );
+
+    label.setOrigin(0.5);
+    label.setScrollFactor(0);
+    label.setDepth(1001);
+
+    button.on("pointerdown", () => action(true));
+    button.on("pointerup", () => action(false));
+    button.on("pointerout", () => action(false));
+    button.on("pointerupoutside", () => action(false));
+
+    return button;
+}
+
+
+// ATUALIZAÇÃO DO JOGO
+function update() {
+
+    if (!player || !player.active) {
+        return;
+    }
+
+    // MOVIMENTAÇÃO
+    if (
+        keys.left.isDown ||
+        cursors.left.isDown ||
+        touchLeft
+    ) {
+        player.setVelocityX(-280);
+    }
+
+    else if (
+        keys.right.isDown ||
+        cursors.right.isDown ||
+        touchRight
+    ) {
+        player.setVelocityX(280);
+    }
+
+    else {
+        player.setVelocityX(0);
+    }
+
+    // PULO
+    const keyboardJump =
+        Phaser.Input.Keyboard.JustDown(jumpKey);
+
+    const canJump =
+        player.body.blocked.down ||
+        player.body.touching.down;
+
+    if ((keyboardJump || jumpRequested) && canJump) {
+        player.setVelocityY(-480);
+    }
+
+    jumpRequested = false;
+
+    // MOVIMENTO DOS INIMIGOS
+    updateEnemies();
+}
