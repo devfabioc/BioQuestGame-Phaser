@@ -1,0 +1,5 @@
+# Project exclude paths
+/node_modules/
+/node_modules/eventemitter3/
+/node_modules/phaser/
+/node_modules/phaser/types/phaser.json
